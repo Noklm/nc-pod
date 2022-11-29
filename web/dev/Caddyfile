@@ -1,0 +1,43 @@
+{
+	debug
+	log {
+		format console
+	}
+}
+
+# Serve php fpm nextcloud app
+http://127.0.0.1:8080, http://localhost:8080 {
+
+        root * /var/www/html
+        file_server
+        encode gzip
+        php_fastcgi 127.0.0.1:9000
+        header {
+                # enable HSTS
+                # Strict-Transport-Security max-age=31536000;
+        }
+
+	tls internal {
+		on_demand
+	}
+
+        redir /.well-known/carddav /remote.php/dav 301
+        redir /.well-known/caldav /remote.php/dav 301
+
+        # .htaccess / data / config / ... shouldn't be accessible from outside
+        @forbidden {
+                path    /.htaccess
+                path    /data/*
+                path    /config/*
+                path    /db_structure
+                path    /.xml
+                path    /README
+                path    /3rdparty/*
+                path    /lib/*
+                path    /templates/*
+                path    /occ
+                path    /console.php
+        }
+
+        respond @forbidden 404
+}

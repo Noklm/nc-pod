@@ -1,0 +1,61 @@
+#https:// {
+#	root * /home/julien/Documents/tools/nextcloud
+#	encode gzip
+#	php_fastcgi 127.0.0.1:9000
+#	file_server
+#	reverse_proxy 127.0.0.1:9000
+#}
+#{
+#	debug
+#	log {
+#		format console
+#	}
+#}
+
+https://nokrux.fr:443 {
+	tls {
+		dns ovh {
+			endpoint ovh-eu
+    			application_key 88ba7c2febac8282
+    			application_secret 0db2a0322a84e718d7cf70671c4b5080
+    			consumer_key 8cca319887178e4cf31ee16505918182
+  		}
+	}
+        root * /var/www/html
+        file_server
+        php_fastcgi 127.0.0.1:9000
+        header {
+                # enable HSTS
+                # Strict-Transport-Security max-age=31536000;
+        }
+
+	tls internal {
+		on_demand
+	}
+
+        redir /.well-known/carddav /remote.php/dav 301
+        redir /.well-known/caldav /remote.php/dav 301
+
+        # .htaccess / data / config / ... shouldn't be accessible from outside
+        @forbidden {
+                path    /.htaccess
+                path    /data/*
+                path    /config/*
+                path    /db_structure
+                path    /.xml
+                path    /README
+                path    /3rdparty/*
+                path    /lib/*
+                path    /templates/*
+                path    /occ
+                path    /console.php
+        }
+
+        respond @forbidden 404
+}
+
+#http://nokrux.fr:8080 {
+#	respond "Hello, world!"
+	#reverse_proxy 127.0.0.1:9001
+#}
+
