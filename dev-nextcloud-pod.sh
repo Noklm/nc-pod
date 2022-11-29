@@ -1,7 +1,9 @@
 #!/bin/bash
 
 NEXTCLOUD_DIR=nextcloud
+DB_DIR=db
 mkdir -p $NEXTCLOUD_DIR
+mkdir -p $DB_DIR
 
 # Container names
 DB_CONTAINER=db
@@ -45,6 +47,7 @@ podman run -d \
     -e MYSQL_PASSWORD=$DB_PWD \
     -e MYSQL_ROOT_PASSWORD=$DB_ROOT_PWD \
     -e MYSQL_DATABASE=$DB_NAME \
+	-v "$PWD"/$DB_DIR:/var/lib/mysql \
     mariadb:10.9 \
 	--transaction-isolation=READ-COMMITTED --binlog-format=ROW
 
@@ -52,7 +55,6 @@ podman run -d \
 podman run -d \
 	--name $NEXTCLOUD_CONTAINER \
 	--pod $POD \
-	-u root \
 	--requires $DB_CONTAINER \
 	-e MYSQL_USER=$DB_USER \
     -e MYSQL_PASSWORD=$DB_PWD \
@@ -64,12 +66,14 @@ podman run -d \
     -e NEXTCLOUD_TRUSTED_DOMAINS=$NEXTCLOUD_TRUSTED_DOMAINS \
 	-v "$PWD"/$NEXTCLOUD_DIR:/var/www/html \
 	nextcloud:23-fpm-alpine
+
 # -v nextcloud:/var/www/html \
 # -v "$PWD"/$NEXTCLOUD_DIR:/var/www/html \
 # -v apps:/var/www/html/custom_apps \
 # -v config:/var/www/html/config \
 # -v data:/var/www/html/data \
 # Starts Caddy server container
+
 podman run -d \
 	--name $WEB_SERVER_CONTAINER \
 	--pod $POD \
@@ -77,3 +81,5 @@ podman run -d \
 	-v caddy_data:/data \
 	--volumes-from app \
 	caddy:2.6-alpine
+
+# 	-v "$PWD"/$NEXTCLOUD_DIR:/var/www/html:z,ro \

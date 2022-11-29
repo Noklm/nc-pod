@@ -1,6 +1,7 @@
 #!/bin/bash
 
 NEXTCLOUD_DIR=nextcloud
+DB_DIR=db
 
 # Pod name
 POD=nextcloud-pod
@@ -12,4 +13,5 @@ if podman pod ls | grep -q $POD; then
 	podman volume rm -a
 fi
 
-[ -d "$NEXTCLOUD_DIR" ] && sudo rm -r nextcloud
+[ -d "$NEXTCLOUD_DIR" ] && sudo rm -r $NEXTCLOUD_DIR
+[ -d "$DB_DIR" ] && sudo rm -r $DB_DIR
