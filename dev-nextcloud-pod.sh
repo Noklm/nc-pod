@@ -46,6 +46,7 @@ podman pod create \
 podman run -d \
     --name $DB_CONTAINER \
 	--pod $POD \
+	--restart always \
     -e MYSQL_USER=$DB_USER \
     -e MYSQL_PASSWORD=$DB_PWD \
     -e MYSQL_ROOT_PASSWORD=$DB_ROOT_PWD \
@@ -58,12 +59,14 @@ podman run -d \
 podman run -d \
     --name $REDIS_CONTAINER \
 	--pod $POD \
+	--restart always \
     redis:7.0-alpine
 
 # Starts Nextcloud container
 podman run -d \
 	--name $NEXTCLOUD_CONTAINER \
 	--pod $POD \
+	--restart always \
 	--requires $DB_CONTAINER,$REDIS_CONTAINER \
 	-e MYSQL_USER=$DB_USER \
     -e MYSQL_PASSWORD=$DB_PWD \
@@ -81,6 +84,7 @@ podman run -d \
 podman run -d \
 	--name $CRON_CONTAINER \
 	--pod $POD \
+	--restart always \
 	--requires $DB_CONTAINER,$REDIS_CONTAINER \
 	--entrypoint /cron.sh \
 	-v "$PWD"/$NEXTCLOUD_DIR:/var/www/html \
@@ -96,6 +100,7 @@ podman run -d \
 podman run -d \
 	--name $WEB_SERVER_CONTAINER \
 	--pod $POD \
+	--restart always \
 	--requires $NEXTCLOUD_CONTAINER \
 	-v "$PWD"/web/dev/Caddyfile:/etc/caddy/Caddyfile \
 	-v caddy_data:/data \
@@ -103,4 +108,4 @@ podman run -d \
 	caddy:2.6-alpine
 
 # 	-v "$PWD"/$NEXTCLOUD_DIR:/var/www/html:z,ro \
-echo "Nextcloud now running at 127.0.0.1:8080"
+echo "Nextcloud now running at http://127.0.0.1:8080"
