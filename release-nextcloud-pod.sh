@@ -1,69 +1,136 @@
 #!/bin/bash
-podman pod stop nextcloud-pod
-podman rm db app web 
 
-DIR=nextcloud
-if [ -d "$DIR" ];
-then
-    echo "$DIR directory exists"
-else
-	echo "Creating $DIR directory"
-    mkdir nextcloud
+NEXTCLOUD_DIR=nextcloud
+DB_DIR=db
+mkdir -p $NEXTCLOUD_DIR
+mkdir -p $DB_DIR
+
+# Container names
+DB_CONTAINER=db
+NEXTCLOUD_CONTAINER=app
+WEB_SERVER_CONTAINER=web
+REDIS_CONTAINER=redis
+CRON_CONTAINER=cron
+AUTOSSH_CONTAINER=autossh
+
+# Pod name
+POD=nextcloud-pod
+POD_PORT=2222
+
+if podman pod ls | grep -q $POD; then
+  	echo "Remove old POD and Containers"
+  	podman pod stop $POD
+	podman pod rm -f $POD
 fi
+
+HOST=127.0.0.1
+
+# Db Env vars
+DB_USER=nextcloud
+DB_PWD=password
+DB_ROOT_PWD=root-pwd
+DB_NAME=db
+
+# Nextcloud Env vars
+NEXTCLOUD_ADMIN_USER=admin   \
+NEXTCLOUD_ADMIN_PASSWORD=admin   \
+NEXTCLOUD_TRUSTED_DOMAINS=nokrux.fr \
+
+# Autossh Env vars
+REMOTE_USER=nextcloud
+SERVER_IP=51.77.212.247
+SERVER_PORT=$POD_PORT
+FORWARD_PORT=443
+HOST_PORT=$FORWARD_PORT
+SSH_BIND_IP="*"
+SSH_KEY_PATH=/home/julien/.ssh/vps_rsa
 
 # Create the pod
 podman pod create \
-	--name nextcloud-pod \
-	-p 2222:2222
+	--name $POD \
+	-p $POD_PORT:$POD_PORT
 
 # Starts mariaDB container
 podman run -d \
-    --name db \
-	--pod nextcloud-pod \
-    -e MYSQL_USER=nextcloud \
-    -e MYSQL_PASSWORD=pwd \
-    -e MYSQL_ROOT_PASSWORD=root-pwd \
-    -e MYSQL_DATABASE=db \
+    --name $DB_CONTAINER \
+	--pod $POD \
+	--restart always \
+    -e MYSQL_USER=$DB_USER \
+    -e MYSQL_PASSWORD=$DB_PWD \
+    -e MYSQL_ROOT_PASSWORD=$DB_ROOT_PWD \
+    -e MYSQL_DATABASE=$DB_NAME \
+	-v "$PWD"/$DB_DIR:/var/lib/mysql \
     mariadb:10.9 \
 	--transaction-isolation=READ-COMMITTED --binlog-format=ROW
 
+# Starts redis container
+podman run -d \
+    --name $REDIS_CONTAINER \
+	--pod $POD \
+	--restart always \
+    redis:7.0-alpine
+
 # Starts Nextcloud container
 podman run -d \
-	--pod nextcloud-pod \
-	--name app \
-	-e MYSQL_ROOT_PASSWORD=root-pwd \
-    -e MYSQL_PASSWORD=pwd   \
-    -e MYSQL_HOST=127.0.0.1 \
-    -e MYSQL_DATABASE=db    \
-    -e MYSQL_USER=nextcloud \
-    -e NEXTCLOUD_ADMIN_USER=admin   \
-    -e NEXTCLOUD_ADMIN_PASSWORD=admin   \
-    -e NEXTCLOUD_TRUSTED_DOMAINS=https://nokrux.fr  \
-	-v /home/julien/Documents/services/nextcloud:/var/www/html \
-	-v apps:/var/www/html/custom_apps \
-	-v config:/var/www/html/config \
-	-v data:/var/www/html/data \
+	--name $NEXTCLOUD_CONTAINER \
+	--pod $POD \
+	--restart always \
+	--requires $DB_CONTAINER,$REDIS_CONTAINER \
+	-e MYSQL_USER=$DB_USER \
+    -e MYSQL_PASSWORD=$DB_PWD \
+	-e MYSQL_ROOT_PASSWORD=$DB_ROOT_PWD \
+    -e MYSQL_DATABASE=$DB_NAME \
+    -e MYSQL_HOST=$HOST \
+    -e REDIS_HOST=$HOST \
+    -e NEXTCLOUD_ADMIN_USER=$NEXTCLOUD_ADMIN_USER \
+    -e NEXTCLOUD_ADMIN_PASSWORD=$NEXTCLOUD_ADMIN_PASSWORD \
+    -e NEXTCLOUD_TRUSTED_DOMAINS=$NEXTCLOUD_TRUSTED_DOMAINS \
+	-v "$PWD"/$NEXTCLOUD_DIR:/var/www/html \
 	nextcloud:23-fpm-alpine
 
-# Starts Caddy server container
+# Starts Nextcloud Cron container
 podman run -d \
-	--pod nextcloud-pod \
-	--name web \
-	-v "$PWD"/web/Caddyfile:/etc/caddy/Caddyfile \
-	-v caddy_data:/data \
-	--volumes-from app \
-	caddy-ovh:1.0
+	--name $CRON_CONTAINER \
+	--pod $POD \
+	--restart always \
+	--requires $DB_CONTAINER,$REDIS_CONTAINER \
+	--entrypoint /cron.sh \
+	-v "$PWD"/$NEXTCLOUD_DIR:/var/www/html \
+	nextcloud:23-fpm-alpine
+
+# Starts Caddy Server container
+# podman run -d \
+# 	--name $WEB_SERVER_CONTAINER \
+# 	--pod $POD \
+# 	--restart always \
+# 	--requires $NEXTCLOUD_CONTAINER \
+# 	-v "$PWD"/web/dev/Caddyfile:/etc/caddy/Caddyfile \
+# 	-v caddy_data:/data \
+# 	--volumes-from app \
+# 	caddy:2.6-alpine
 
 # Starts autoSSH container
 podman run -d \
-	--name autossh \
-	--pod nextcloud-pod \
-	-e SSH_REMOTE_USER=nextcloud \
-	-e SSH_REMOTE_HOST=51.77.212.247 \
-	-e SSH_REMOTE_PORT=2222 \
-	-e SSH_TUNNEL_PORT=443 \
-	-e SSH_TARGET_HOST=127.0.0.1 \
-	-e SSH_TARGET_PORT=443 \
-	-e SSH_BIND_IP=* \
-	-v /home/julien/.ssh/vps_rsa:/id_rsa \
+	--name $AUTOSSH_CONTAINER \
+	--pod $POD \
+	-e SSH_REMOTE_USER=$REMOTE_USER \
+	-e SSH_REMOTE_HOST=$SERVER_IP \
+	-e SSH_REMOTE_PORT=$SERVER_PORT \
+	-e SSH_TUNNEL_PORT=$FORWARD_PORT \
+	-e SSH_TARGET_HOST=$HOST \
+	-e SSH_TARGET_PORT=$HOST_PORT \
+	-e SSH_BIND_IP="$SSH_BIND_IP" \
+	-v $SSH_KEY_PATH:/id_rsa \
 	jnovack/autossh:2.0.1
+
+# Starts Caddy server container
+podman run -d \
+	--name $WEB_SERVER_CONTAINER \
+	--pod $POD \
+	--restart always \
+	--requires $NEXTCLOUD_CONTAINER,$AUTOSSH_CONTAINER \
+	-v "$PWD"/web/Caddyfile:/etc/caddy/Caddyfile \
+	-v caddy_data:/data \
+	--volumes-from $NEXTCLOUD_CONTAINER \
+	caddy-ovh:1.0
+echo "Nextcloud available at https://nokrux.fr"
