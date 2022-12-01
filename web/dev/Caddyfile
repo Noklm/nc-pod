@@ -6,7 +6,7 @@
 }
 
 # Serve php fpm nextcloud app
-http://127.0.0.1:8080, http://localhost:8080 {
+http://127.0.0.1:9001 {
 
         root * /var/www/html
         file_server
@@ -40,4 +40,8 @@ http://127.0.0.1:8080, http://localhost:8080 {
         }
 
         respond @forbidden 404
+}
+
+http://127.0.0.1:8080 {
+        reverse_proxy http://127.0.0.1:9001
 }
