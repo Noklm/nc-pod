@@ -104,7 +104,7 @@ podman run -d \
 	--requires $NEXTCLOUD_CONTAINER \
 	-v "$PWD"/web/dev/Caddyfile:/etc/caddy/Caddyfile \
 	-v caddy_data:/data \
-	--volumes-from app \
+	--volumes-from $NEXTCLOUD_CONTAINER \
 	caddy:2.6-alpine
 
 # 	-v "$PWD"/$NEXTCLOUD_DIR:/var/www/html:z,ro \
