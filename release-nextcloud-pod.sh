@@ -3,8 +3,7 @@
 
 source .env
 
-mkdir -p "$NEXTCLOUD_DIR"
-mkdir -p "$DB_DIR"
+mkdir -p "$MOUNT_POINT"/db "$MOUNT_POINT"/nextcloud "$MOUNT_POINT"/apps "$MOUNT_POINT"/config "$MOUNT_POINT"/data "$MOUNT_POINT"/theme
 
 if podman pod ls | grep -q "$POD"; then
   	echo "Remove old POD and Containers"
@@ -25,8 +24,8 @@ podman run -d \
     -e MYSQL_USER="$DB_USER" \
     -e MYSQL_PASSWORD="$DB_PWD" \
     -e MYSQL_ROOT_PASSWORD="$DB_ROOT_PWD" \
-    -e MYSQL_DATABASE="$DB_NAME "\
-	-v "$PWD"/"$DB_DIR":/var/lib/mysql \
+    -e MYSQL_DATABASE="$DB_NAME"\
+	-v "$MOUNT_POINT"/db:/var/lib/mysql \
     mariadb:10.9 \
 	--transaction-isolation=READ-COMMITTED --binlog-format=ROW
 
@@ -53,7 +52,11 @@ podman run -d \
     -e NEXTCLOUD_ADMIN_USER="$NEXTCLOUD_ADMIN_USER" \
     -e NEXTCLOUD_ADMIN_PASSWORD="$NEXTCLOUD_ADMIN_PASSWORD" \
     -e NEXTCLOUD_TRUSTED_DOMAINS="$NEXTCLOUD_CONTAINER"."$DOMAIN" \
-	-v "$PWD"/"$NEXTCLOUD_DIR":/var/www/html \
+	-v "$MOUNT_POINT"/nextcloud:/var/www/html \
+	-v "$MOUNT_POINT"/apps:/var/www/html/custom_apps \
+	-v "$MOUNT_POINT"/config:/var/www/html/config \
+	-v "$MOUNT_POINT"/data:/var/www/html/data \
+	-v "$MOUNT_POINT"/theme:/var/www/html/themes/custom_theme \
 	nextcloud:23-fpm-alpine
 
 # Starts Nextcloud Cron container
@@ -88,7 +91,7 @@ podman run -d \
 	--pod "$POD" \
 	--restart always \
 	--cap-add MKNOD \
-	-e "aliasgroup1=$OFFICE_DOMAIN" \
+	-e "aliasgroup1=$OFFICE_ALIASGROUP" \
 	-e "username=$OFFICE_USERNAME" \
 	-e "password=$OFFICE_PWD" \
 	-e "dictionaries=fr_FR,en_US" \
@@ -101,13 +104,16 @@ podman run -d \
 	--pod "$POD" \
 	--restart always \
 	--requires "$NEXTCLOUD_CONTAINER","$AUTOSSH_CONTAINER" \
-	-v "$PWD"/web/Caddyfile:/etc/caddy/Caddyfile \
+	-v "$CADDYFILE_PATH":/etc/caddy/Caddyfile \
 	-v caddy_data:/data \
 	--volumes-from "$NEXTCLOUD_CONTAINER" \
-	-e APP_KEY="$APP_KEY" \
-	-e APP_SECRET="$APP_SECRET" \
-	-e CONSUMER_KEY="$CONSUMER_KEY" \
+	-e OVH_ENDPOINT=ovh-eu \
+	-e OVH_APPLICATION_KEY="$OVH_APPLICATION_KEY" \
+	-e OVH_APPLICATION_SECRET="$OVH_APPLICATION_SECRET" \
+	-e OVH_CONSUMER_KEY="$OVH_CONSUMER_KEY" \
 	-e DOMAIN="$DOMAIN" \
+	-e NC_SUBDOMAIN="$NEXTCLOUD_CONTAINER" \
+	-e OFFICE_SUBDOMAIN="$OFFICE_CONTAINER" \
 	caddy-ovh:1.0
 
-echo "Nextcloud available at https://$NEXTCLOUD_TRUSTED_DOMAINS"
+echo "Nextcloud available at https://$NEXTCLOUD_CONTAINER.$DOMAIN"

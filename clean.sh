@@ -1,17 +1,12 @@
 #!/bin/bash
-
-NEXTCLOUD_DIR=nextcloud
-DB_DIR=db
+# shellcheck disable=SC1091
 
 # Pod name
-POD=nextcloud-pod
-# export SITE_PORT=8080
+source .env
 
-if podman pod ls | grep -q $POD; then
-  	podman pod stop $POD
-	podman pod rm -f $POD
-	podman volume rm -a
+if podman pod ls | grep -q "$POD"; then
+  	podman pod stop "$POD"
+	podman pod rm -f "$POD"
 fi
 
-[ -d "$NEXTCLOUD_DIR" ] && sudo rm -r $NEXTCLOUD_DIR
-[ -d "$DB_DIR" ] && sudo rm -r $DB_DIR
+[ -d "$MOUNT_POINT" ] && sudo rm -r "$MOUNT_POINT"
